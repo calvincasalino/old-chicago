@@ -1,22 +1,32 @@
 import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { places } from "../data/places";
+import { LatLngBounds } from "leaflet";
+import { usePlaces } from "../hooks/usePlaces";
+import type { Place } from "../types";
 
-function FitToPlaces() {
+function FitToBounds({ points }: { points: Array<[number, number]> }) {
   const map = useMap();
   const bounds = useMemo(() => {
-    if (places.length === 0) return null;
-    const latlngs = places.map(p => [p.lat, p.lng]) as [number, number][];
-    // @ts-ignore
-    return L.latLngBounds(latlngs);
-  }, []);
-  if (bounds) map.fitBounds(bounds.pad(0.2)); // add padding
+    if (!points.length) return null;
+    return new LatLngBounds(points);
+  }, [points]);
+
+  useEffect(() => {
+    if (bounds) map.fitBounds(bounds.pad(0.2));
+  }, [bounds, map]);
+
   return null;
 }
 
 export default function HomeMapPage() {
   const navigate = useNavigate();
+  const { data: places, loading, error } = usePlaces();
+
+  const points = useMemo(
+    () => (places ?? []).map((p: Place) => [p.lat, p.lng]) as Array<[number, number]>,
+    [places]
+  );
 
   return (
     <div className="page">
@@ -31,8 +41,12 @@ export default function HomeMapPage() {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <FitToPlaces />
-          {places.map(p => (
+          {!!points.length && <FitToBounds points={points} />}
+
+          {loading && <div className="p-3">Loading…</div>}
+          {!!error && <div className="p-3 text-red-600">Failed to load.</div>}
+
+          {(places ?? []).map(p => (
             <CircleMarker
               key={p.slug}
               center={[p.lat, p.lng]}
@@ -40,9 +54,7 @@ export default function HomeMapPage() {
               weight={2}
               opacity={1}
               fillOpacity={0.8}
-              eventHandlers={{
-                click: () => navigate(`/place/${p.slug}`)
-              }}
+              eventHandlers={{ click: () => navigate(`/place/${p.slug}`) }}
             >
               <Tooltip>{p.name}</Tooltip>
             </CircleMarker>
